@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Register — SecureVault</title>
+  <meta name="description" content="Create your SecureVault account and start encrypting files with military-grade AES encryption." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔐</text></svg>" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+
+<div class="auth-wrapper">
+  <div class="auth-card">
+
+    <!-- Logo -->
+    <div class="auth-logo">
+      <div class="logo-icon">🛡️</div>
+      <h1>Create Account</h1>
+      <p>Join SecureVault — protect your files today</p>
+    </div>
+
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div style="margin-bottom: 1.25rem;">
+          {% for category, message in messages %}
+            <div class="flash {{ category }}" style="position:relative;">
+              {{ message }}
+              <button class="flash-close" onclick="this.parentElement.remove()">✕</button>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <!-- Register Form -->
+    <form action="{{ url_for('register') }}" method="POST" id="registerForm" novalidate>
+
+      <div class="form-group">
+        <label class="form-label" for="username">Username</label>
+        <input type="text" id="username" name="username" class="form-control"
+               placeholder="Choose a username (min 3 chars)"
+               autocomplete="username" required minlength="3"
+               oninput="checkUsername(this)" />
+        <div id="usernameHint" class="text-muted mt-1"></div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="password">
+          Password
+          <span style="float:right; font-size:0.75rem; color:var(--text-muted); font-weight:400; text-transform:none; letter-spacing:0;">
+            min 6 characters
+          </span>
+        </label>
+        <input type="password" id="password" name="password" class="form-control"
+               placeholder="Create a strong password"
+               autocomplete="new-password" required minlength="6"
+               oninput="checkPasswordStrength(this.value)" />
+        <div class="password-strength">
+          <div class="password-strength-fill" id="strengthBar"></div>
+        </div>
+        <div id="strengthLabel" class="text-muted mt-1" style="font-size:0.75rem;"></div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="confirm_password">Confirm Password</label>
+        <input type="password" id="confirm_password" name="confirm_password" class="form-control"
+               placeholder="Repeat your password"
+               autocomplete="new-password" required minlength="6"
+               oninput="checkMatch()" />
+        <div id="matchHint" class="text-muted mt-1"></div>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-full btn-lg" id="registerBtn"
+              style="margin-top: 0.5rem;">
+        🚀 Create Account
+      </button>
+
+    </form>
+
+    <div class="auth-divider">or</div>
+
+    <div class="auth-footer">
+      Already have an account?
+      <a href="{{ url_for('login') }}">Sign in →</a>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  /* Password strength checker */
+  function checkPasswordStrength(pw) {
+    const bar   = document.getElementById('strengthBar');
+    const label = document.getElementById('strengthLabel');
+    bar.className = 'password-strength-fill';
+
+    if (!pw) { bar.style.width = '0'; label.textContent = ''; return; }
+
+    let score = 0;
+    if (pw.length >= 6)  score++;
+    if (pw.length >= 10) score++;
+    if (/[A-Z]/.test(pw)) score++;
+    if (/[0-9]/.test(pw)) score++;
+    if (/[^A-Za-z0-9]/.test(pw)) score++;
+
+    if (score <= 2) {
+      bar.classList.add('strength-weak');
+      label.textContent = '⚠️  Weak password';
+      label.style.color = 'var(--accent-red)';
+    } else if (score <= 3) {
+      bar.classList.add('strength-medium');
+      label.textContent = '🟡 Medium password';
+      label.style.color = 'var(--accent-yellow)';
+    } else {
+      bar.classList.add('strength-strong');
+      label.textContent = '✅ Strong password';
+      label.style.color = 'var(--accent-green)';
+    }
+  }
+
+  /* Confirm password match */
+  function checkMatch() {
+    const pw  = document.getElementById('password').value;
+    const cpw = document.getElementById('confirm_password').value;
+    const hint = document.getElementById('matchHint');
+    if (!cpw) { hint.textContent = ''; return; }
+    if (pw === cpw) {
+      hint.textContent = '✅ Passwords match';
+      hint.style.color = 'var(--accent-green)';
+    } else {
+      hint.textContent = '❌ Passwords do not match';
+      hint.style.color = 'var(--accent-red)';
+    }
+  }
+
+  /* Username validation feedback */
+  function checkUsername(input) {
+    const hint = document.getElementById('usernameHint');
+    const v = input.value.trim();
+    if (!v) { hint.textContent = ''; return; }
+    if (v.length < 3) {
+      hint.textContent = '❌ Too short (min 3 characters)';
+      hint.style.color = 'var(--accent-red)';
+    } else if (/\s/.test(v)) {
+      hint.textContent = '❌ No spaces allowed';
+      hint.style.color = 'var(--accent-red)';
+    } else {
+      hint.textContent = '✅ Username looks good';
+      hint.style.color = 'var(--accent-green)';
+    }
+  }
+
+  /* Disable button on submit */
+  document.getElementById('registerForm').addEventListener('submit', function(e) {
+    const btn = document.getElementById('registerBtn');
+    btn.textContent = 'Creating account…';
+    btn.disabled = true;
+  });
+</script>
+
+</body>
+</html>

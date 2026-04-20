@@ -1,0 +1,3 @@
+Hello, this is a secret message for the File Encryption & Secure File Sharing System!
+This content should be encrypted and then decrypted successfully.
+SHA-256 integrity check will be performed.

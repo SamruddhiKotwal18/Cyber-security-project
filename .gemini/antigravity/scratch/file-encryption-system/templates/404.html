@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>404 — SecureVault</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔐</text></svg>" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+  <div class="error-page">
+    <div>
+      <div class="error-code">404</div>
+      <h2 style="margin-bottom:0.5rem;">Page Not Found</h2>
+      <p style="margin-bottom:2rem;">The page you're looking for doesn't exist or has been moved.</p>
+      <a href="{{ url_for('index') }}" class="btn btn-primary btn-lg">🏠 Back to Dashboard</a>
+    </div>
+  </div>
+</body>
+</html>

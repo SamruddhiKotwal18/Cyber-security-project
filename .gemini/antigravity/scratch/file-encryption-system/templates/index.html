@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🔐 SecureVault — File Encryption System</title>
+  <meta name="description" content="Securely upload, encrypt, and decrypt files using AES encryption. Protect your data with military-grade security." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔐</text></svg>" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+
+<!-- ── Loading Overlay ── -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner"></div>
+  <p style="color: var(--text-secondary); font-size: 0.9rem;">Processing, please wait…</p>
+</div>
+
+<!-- ── Navbar ── -->
+<nav class="navbar">
+  <a href="{{ url_for('index') }}" class="navbar-brand">
+    <div class="brand-icon">🔐</div>
+    SecureVault
+  </a>
+  <ul class="navbar-nav">
+    <li><a href="{{ url_for('index') }}">Dashboard</a></li>
+  </ul>
+  <div class="navbar-user">
+    <div class="avatar">{{ username[0].upper() }}</div>
+    <span>{{ username }}</span>
+    <a href="{{ url_for('logout') }}" class="btn btn-outline btn-sm">Logout</a>
+  </div>
+</nav>
+
+<!-- ── Main ── -->
+<main class="container">
+
+  <!-- Page Header -->
+  <div class="page-header">
+    <h1>🛡️ Secure File Dashboard</h1>
+    <p class="subtitle">Upload, encrypt, and decrypt files using AES (Fernet) encryption.</p>
+  </div>
+
+  <!-- Flash Messages -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="flash-container" id="flashContainer">
+      {% for category, message in messages %}
+        {% if category == 'encrypt_success' %}
+          <!-- Parse the encrypt_success message -->
+          <div class="flash encrypt_success">
+            <button class="flash-close" onclick="this.parentElement.remove()">✕</button>
+            <div style="display:flex; align-items:center; gap:0.5rem; font-weight:700; color:#a78bfa; font-size:0.95rem;">
+              🔐 Encryption Successful!
+            </div>
+            {% set parts = message.split(' | ') %}
+            {% for part in parts %}
+              {% if 'KEY' in part %}
+                <div>
+                  <div style="font-size:0.78rem; color:var(--text-muted); margin-bottom:0.3rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em;">
+                    🔑 Encryption Key — Save this now, it won't be stored!
+                  </div>
+                  <div class="key-display">{{ part.replace('🔑 KEY (save this!): ', '') }}</div>
+                  <button onclick="copyKey(this)" data-key="{{ part.replace('🔑 KEY (save this!): ', '') }}"
+                    class="btn btn-outline btn-sm mt-2" style="margin-top:0.5rem;">
+                    📋 Copy Key
+                  </button>
+                </div>
+              {% elif 'Encrypted file:' in part %}
+                <div style="font-size:0.8rem; color:var(--text-secondary);">
+                  📁 <strong style="color:var(--text-primary);">Encrypted File:</strong>
+                  <span class="mono">{{ part.replace('Encrypted file: ', '') }}</span>
+                </div>
+              {% elif 'Original SHA' in part %}
+                <div style="font-size: 0.77rem; color: var(--text-muted);">
+                  🔏 {{ part }}
+                </div>
+              {% elif 'Encrypted SHA' in part %}
+                <div style="font-size: 0.77rem; color: var(--text-muted);">
+                  🔏 {{ part }}
+                </div>
+              {% endif %}
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="flash {{ category }}">
+            <span>{{ message }}</span>
+            <button class="flash-close" onclick="this.parentElement.remove()">✕</button>
+          </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+    {% endif %}
+  {% endwith %}
+
+  <!-- Stats Bar -->
+  <div class="stats-bar" id="statsBar">
+    <div class="stat-card">
+      <div class="stat-icon blue">📤</div>
+      <div>
+        <div class="stat-value" id="uploadCount">—</div>
+        <div class="stat-label">Files Uploaded</div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon purple">🔐</div>
+      <div>
+        <div class="stat-value" id="encryptCount">—</div>
+        <div class="stat-label">Files Encrypted</div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon green">🔓</div>
+      <div>
+        <div class="stat-value" id="decryptCount">—</div>
+        <div class="stat-label">Files Decrypted</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Row 1: Upload + Encrypt -->
+  <div class="grid-2" style="margin-bottom: 1.5rem;">
+
+    <!-- Upload Card -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon upload">📤</div>
+        <div>
+          <div class="card-title">Upload File</div>
+          <div class="card-desc">Supports txt, pdf, images, docx, xlsx, zip…</div>
+        </div>
+      </div>
+      <form action="{{ url_for('upload_file') }}" method="POST" enctype="multipart/form-data"
+            onsubmit="showLoading()">
+        <div class="form-group">
+          <div class="file-drop-zone" id="dropZone">
+            <input type="file" name="file" id="fileInput" required
+                   accept=".txt,.pdf,.png,.jpg,.jpeg,.gif,.docx,.xlsx,.pptx,.csv,.zip,.mp3,.mp4"
+                   onchange="updateDropZone(this)" />
+            <div class="drop-icon">📁</div>
+            <div class="drop-title" id="dropTitle">Drop your file here</div>
+            <div class="drop-hint" id="dropHint">or click to browse — max 16 MB</div>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-blue btn-full btn-lg">
+          📤 Upload File
+        </button>
+      </form>
+    </div>
+
+    <!-- Encrypt Card -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon encrypt">🔐</div>
+        <div>
+          <div class="card-title">Encrypt File</div>
+          <div class="card-desc">AES encryption via Fernet — key generated automatically</div>
+        </div>
+      </div>
+      <form action="{{ url_for('encrypt_file') }}" method="POST" onsubmit="showLoading()">
+        <div class="form-group">
+          <label class="form-label" for="encFilename">Select Uploaded File</label>
+          <select name="filename" id="encFilename" class="form-control" required>
+            <option value="">— Choose a file —</option>
+          </select>
+        </div>
+        <div style="background: rgba(108,99,255,0.06); border: 1px solid rgba(108,99,255,0.2);
+                    border-radius: 8px; padding: 0.9rem; margin-bottom: 1.25rem; font-size: 0.8rem;
+                    color: var(--text-secondary);">
+          ⚠️ <strong style="color:var(--text-primary);">Important:</strong>
+          The encryption key will be shown <em>once</em>. Copy and store it safely — it is never saved on the server.
+        </div>
+        <button type="submit" class="btn btn-primary btn-full btn-lg">
+          🔐 Encrypt File
+        </button>
+      </form>
+    </div>
+
+  </div>
+
+  <!-- Row 2: Decrypt -->
+  <div class="card" style="margin-bottom: 1.5rem;">
+    <div class="card-header">
+      <div class="card-icon decrypt">🔓</div>
+      <div>
+        <div class="card-title">Decrypt File</div>
+        <div class="card-desc">Enter your Fernet key to restore the original file</div>
+      </div>
+    </div>
+    <form action="{{ url_for('decrypt_file') }}" method="POST" onsubmit="showLoading()">
+      <div class="grid-2" style="margin-bottom:1rem;">
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label" for="decFilename">Select Encrypted File</label>
+          <select name="enc_filename" id="decFilename" class="form-control" required>
+            <option value="">— Choose encrypted file —</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label" for="decryptKey">Decryption Key</label>
+          <input type="text" name="decrypt_key" id="decryptKey" class="form-control form-control-mono"
+                 placeholder="Paste your Fernet encryption key here…"
+                 autocomplete="off" required />
+        </div>
+      </div>
+      <button type="submit" class="btn btn-green btn-lg" style="min-width:200px;">
+        🔓 Decrypt File
+      </button>
+    </form>
+  </div>
+
+  <!-- Row 3: File Explorer -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-icon files">📂</div>
+      <div>
+        <div class="card-title">File Explorer</div>
+        <div class="card-desc">All your uploaded, encrypted, and decrypted files</div>
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="loadFiles()" style="margin-left:auto;">
+        🔄 Refresh
+      </button>
+    </div>
+
+    <!-- Tabs -->
+    <div style="display:flex; gap:0.5rem; margin-bottom:1.25rem;">
+      <button class="btn btn-blue btn-sm tab-btn active" data-tab="uploads"
+              onclick="switchTab('uploads', this)">📤 Uploads</button>
+      <button class="btn btn-outline btn-sm tab-btn" data-tab="encrypted"
+              onclick="switchTab('encrypted', this)">🔐 Encrypted</button>
+      <button class="btn btn-outline btn-sm tab-btn" data-tab="decrypted"
+              onclick="switchTab('decrypted', this)">🔓 Decrypted</button>
+    </div>
+
+    <!-- Upload Table -->
+    <div id="tab-uploads" class="tab-content">
+      <div class="file-table-wrap">
+        <table class="file-table" id="uploadsTable">
+          <thead>
+            <tr>
+              <th>File Name</th>
+              <th>Size</th>
+              <th>Modified</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="uploadsBody">
+            <tr><td colspan="4" class="text-center text-muted" style="padding:2rem;">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Encrypted Table -->
+    <div id="tab-encrypted" class="tab-content" style="display:none;">
+      <div class="file-table-wrap">
+        <table class="file-table" id="encryptedTable">
+          <thead>
+            <tr>
+              <th>File Name</th>
+              <th>Size</th>
+              <th>Modified</th>
+              <th>Status</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="encryptedBody">
+            <tr><td colspan="5" class="text-center text-muted" style="padding:2rem;">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Decrypted Table -->
+    <div id="tab-decrypted" class="tab-content" style="display:none;">
+      <div class="file-table-wrap">
+        <table class="file-table" id="decryptedTable">
+          <thead>
+            <tr>
+              <th>File Name</th>
+              <th>Size</th>
+              <th>Modified</th>
+              <th>Status</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="decryptedBody">
+            <tr><td colspan="5" class="text-center text-muted" style="padding:2rem;">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- /card -->
+
+</main>
+
+<!-- ── How It Works Footer ── -->
+<footer style="border-top: 1px solid var(--border-subtle); padding: 2rem; margin-top: 1rem;">
+  <div style="max-width:1200px; margin:0 auto;">
+    <h3 style="font-size:0.9rem; color:var(--text-muted); font-weight:600;
+               text-transform:uppercase; letter-spacing:0.08em; margin-bottom:1.25rem;">
+      How It Works
+    </h3>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:1.25rem;">
+      {% for step in [
+          ('1', '📤', 'Upload', 'Choose any file (txt, pdf, image, etc.)'),
+          ('2', '🔐', 'Encrypt', 'Fernet AES generates a unique key & encrypts the file'),
+          ('3', '💾', 'Save Key', 'Copy your key — it is never stored on the server'),
+          ('4', '🔓', 'Decrypt', 'Paste the key later to restore your original file')
+      ] %}
+      <div style="display:flex; gap:0.75rem; align-items:flex-start;">
+        <div style="width:28px; height:28px; border-radius:50%; background:rgba(108,99,255,0.2);
+                    color:#a78bfa; display:flex; align-items:center; justify-content:center;
+                    font-weight:700; font-size:0.78rem; flex-shrink:0;">{{ step[0] }}</div>
+        <div>
+          <div style="font-size:0.85rem; font-weight:600; color:var(--text-primary);">
+            {{ step[2] }} {{ step[1] }}
+          </div>
+          <div style="font-size:0.78rem; color:var(--text-muted);">{{ step[3] }}</div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <p style="margin-top:1.5rem; font-size:0.75rem; color:var(--text-muted);">
+      🔐 SecureVault &bull; Built with Flask + Fernet (AES-128-CBC + HMAC-SHA256) &bull; College Mini Project
+    </p>
+  </div>
+</footer>
+
+<script>
+  /* ── Loading ── */
+  function showLoading() {
+    document.getElementById('loadingOverlay').classList.add('active');
+  }
+
+  /* ── Drop Zone ── */
+  const dropZone = document.getElementById('dropZone');
+  ['dragover','dragenter'].forEach(evt => {
+    dropZone.addEventListener(evt, e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+  });
+  ['dragleave','drop'].forEach(evt => {
+    dropZone.addEventListener(evt, () => dropZone.classList.remove('dragover'));
+  });
+
+  function updateDropZone(input) {
+    const f = input.files[0];
+    if (f) {
+      document.getElementById('dropTitle').textContent = '✅ ' + f.name;
+      document.getElementById('dropHint').textContent =
+        formatBytes(f.size) + ' — ready to upload';
+    }
+  }
+
+  function formatBytes(b) {
+    if (b < 1024)       return b + ' B';
+    if (b < 1048576)    return (b/1024).toFixed(1) + ' KB';
+    return (b/1048576).toFixed(2) + ' MB';
+  }
+
+  /* ── Copy Key ── */
+  function copyKey(btn) {
+    const key = btn.dataset.key;
+    navigator.clipboard.writeText(key).then(() => {
+      btn.textContent = '✅ Copied!';
+      setTimeout(() => { btn.textContent = '📋 Copy Key'; }, 2500);
+    });
+  }
+
+  /* ── Tab Switching ── */
+  function switchTab(tab, btn) {
+    document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('.tab-btn').forEach(b => {
+      b.classList.remove('btn-blue');
+      b.classList.add('btn-outline');
+    });
+    document.getElementById('tab-' + tab).style.display = 'block';
+    btn.classList.remove('btn-outline');
+    btn.classList.add('btn-blue');
+  }
+
+  /* ── Load Files from API ── */
+  async function loadFiles() {
+    try {
+      const res  = await fetch('/api/files');
+      const data = await res.json();
+
+      // Stats
+      document.getElementById('uploadCount').textContent  = data.uploads.length;
+      document.getElementById('encryptCount').textContent = data.encrypted.length;
+      document.getElementById('decryptCount').textContent = data.decrypted.length;
+
+      // Populate upload select
+      const encSelect = document.getElementById('encFilename');
+      const prevEnc   = encSelect.value;
+      encSelect.innerHTML = '<option value="">— Choose a file —</option>';
+      data.uploads.forEach(f => {
+        const opt = new Option(f.name + '  (' + formatBytes(f.size) + ')', f.name);
+        encSelect.appendChild(opt);
+      });
+      if (prevEnc) encSelect.value = prevEnc;
+
+      // Populate decrypt select
+      const decSelect = document.getElementById('decFilename');
+      const prevDec   = decSelect.value;
+      decSelect.innerHTML = '<option value="">— Choose encrypted file —</option>';
+      data.encrypted.forEach(f => {
+        const opt = new Option(f.name, f.name);
+        decSelect.appendChild(opt);
+      });
+      if (prevDec) decSelect.value = prevDec;
+
+      // Uploads table
+      const ub = document.getElementById('uploadsBody');
+      if (data.uploads.length === 0) {
+        ub.innerHTML = '<tr><td colspan="4" class="text-center text-muted" style="padding:2rem;">No files uploaded yet</td></tr>';
+      } else {
+        ub.innerHTML = data.uploads.map(f => `
+          <tr>
+            <td><span class="file-name" title="${f.name}">${f.name}</span></td>
+            <td>${formatBytes(f.size)}</td>
+            <td class="text-muted">${f.modified}</td>
+            <td>—</td>
+          </tr>`).join('');
+      }
+
+      // Encrypted table
+      const eb = document.getElementById('encryptedBody');
+      if (data.encrypted.length === 0) {
+        eb.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding:2rem;">No files encrypted yet</td></tr>';
+      } else {
+        eb.innerHTML = data.encrypted.map(f => `
+          <tr>
+            <td><span class="file-name" title="${f.name}">${f.name}</span></td>
+            <td>${formatBytes(f.size)}</td>
+            <td class="text-muted">${f.modified}</td>
+            <td><span class="badge badge-purple">🔐 Encrypted</span></td>
+            <td>
+              <a href="/download/encrypted/${encodeURIComponent(f.name)}"
+                 class="btn btn-outline btn-sm">⬇ Download</a>
+            </td>
+          </tr>`).join('');
+      }
+
+      // Decrypted table
+      const db = document.getElementById('decryptedBody');
+      if (data.decrypted.length === 0) {
+        db.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding:2rem;">No files decrypted yet</td></tr>';
+      } else {
+        db.innerHTML = data.decrypted.map(f => `
+          <tr>
+            <td><span class="file-name" title="${f.name}">${f.name}</span></td>
+            <td>${formatBytes(f.size)}</td>
+            <td class="text-muted">${f.modified}</td>
+            <td><span class="badge badge-green">✅ Restored</span></td>
+            <td>
+              <a href="/download/decrypted/${encodeURIComponent(f.name)}"
+                 class="btn btn-outline btn-sm">⬇ Download</a>
+            </td>
+          </tr>`).join('');
+      }
+
+    } catch (err) {
+      console.error('Failed to load files:', err);
+    }
+  }
+
+  // Initial load + auto-refresh every 10s
+  loadFiles();
+  setInterval(loadFiles, 10000);
+
+  // Auto-close flash after 12 seconds
+  setTimeout(() => {
+    document.querySelectorAll('.flash').forEach(el => {
+      el.style.transition = 'opacity 0.5s';
+      el.style.opacity = '0';
+      setTimeout(() => el.remove(), 500);
+    });
+  }, 12000);
+</script>
+
+</body>
+</html>
